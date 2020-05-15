@@ -1,0 +1,257 @@
+---
+title: "ASM_2"
+author: "Sneha Srivastava"
+date: "13/05/2020"
+output: html_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r dataset}
+wine_full <- read.csv("winemag-data-130k-v2.csv")
+head(wine_full)
+```
+
+## Gibbs sampler
+
+
+```{r gibbs}
+compare_m_gibbs <- function(y, ind, mu0 = 85, tau0 = 1/400, del0 = 0, gamma0 = 1/400,
+a0 = 1, b0 = 85, maxiter = 5000)
+{
+y1 <- y[ind == 'Chardonnay']
+y2 <- y[ind == 'Sauvignon Blanc']
+y1
+y2
+n1 <- length(y1)
+n2 <- length(y2)
+##### starting values
+mu <- (mean(y1) + mean(y2)) / 2
+del <- (mean(y1) - mean(y2)) / 2
+mat_store <- matrix(0, nrow = maxiter, ncol = 3)
+#####
+##### Gibbs sampler
+an <- a0 + (n1 + n2)/2
+for(s in 1 : maxiter)
+{
+##update tau
+bn <- b0 + 0.5 * (sum((y1 - mu - del) ^ 2) + sum((y2 - mu + del) ^ 2))
+tau <- rgamma(1, an, bn)
+##
+##update mu
+taun <- tau0 + tau * (n1 + n2)
+mun <- (tau0 * mu0 + tau * (sum(y1 - del) + sum(y2 + del))) / taun
+mu <- rnorm(1, mun, sqrt(1/taun))
+##
+##update del
+gamman <- tau0 + tau*(n1 + n2)
+deln <- ( del0 * tau0 + tau * (sum(y1 - mu) - sum(y2 - mu))) / gamman
+del<-rnorm(1, deln, sqrt(1/gamman))
+##
+## store parameter values
+mat_store[s, ] <- c(mu, del, tau)
+}
+colnames(mat_store) <- c("mu", "del", "tau")
+return(mat_store)
+}
+```
+```{r}
+library(zoo)
+library(httr)
+library(readr)
+#library(ggpubr)
+library(plotly)
+library(mclust)
+library(ggplot2)
+library(reshape)
+library(stringr)
+library(MCMCpack)
+library(BayesLCA)
+library(jsonlite)
+library(tidyverse)
+```
+
+
+
+```{r}
+dim(wine_full)
+```
+
+
+```{r}
+nlevels(wine_full$variety)
+```
+
+
+```{r}
+#df_country <- wine_full[which(wine_full$country =='South Africa' | wine_full$country == #'Chile'),]
+#head(df_country)
+```
+
+
+
+
+
+```{r}
+#df_sa = wine_full[wine_full$country=='South Africa',]
+#df_ch = wine_full[wine_full$country=='Chile',]
+```
+
+
+```{r}
+# South Africa also has chardonnay
+#var = df_sa[df_sa$variety == 'Chardonnay' ,]
+#print(var)
+```
+
+
+```{r}
+#head(df_sa)
+#head(df_ch)
+```
+
+
+```{r}
+#nrow(df_sa)
+#nrow(df_ch)
+```
+```{r}
+#df_sa$variety <- factor(df_sa$variety)
+#df_ch$variety <- factor(df_ch$variety)
+
+```
+```{r}
+#print(df_sa$variety)
+#nlevels(df_sa$variety)
+#nlevels(df_ch$variety)
+```
+
+
+```{r}
+#sb = df_sa[df_sa$variety=='Sauvignon Blanc',]
+#chard = df_ch[df_ch$variety == 'Chardonnay',]
+
+```
+```{r}
+#nrow(sb)
+#nrow(chard)
+```
+
+
+```{r}
+#mean(sb$points)
+#mean(chard$points)
+#median(sb$points)
+#median(chard$points)
+```
+```{r}
+#ggplot(sb) + geom_boxplot(aes(variety, points, fill = variety))
+```
+
+
+```{r}
+#ggplot(chard) + geom_boxplot(aes(variety, points, fill = variety))
+```
+
+
+
+```{r}
+wine_full1 <- wine_full %>%
+  filter((country == 'South Africa' & variety == 'Sauvignon Blanc' & price == 15) | (country == 'Chile' & variety == 'Chardonnay' & price == 15) ) #%>%
+  #mutate(variety = as.factor(variety))
+```
+
+
+```{r}
+head(wine_full1)
+```
+
+
+```{r}
+
+t.test(points ~ variety, data=wine_full1, var.equal = TRUE)
+
+```
+
+
+```{r}
+ggplot(wine_full1) + geom_boxplot(aes(variety, points, fill = variety)) + geom_jitter(aes(variety, points, shape = variety))
+```
+
+
+```{r}
+library(MCMCpack)
+fit <- compare_m_gibbs(wine_full1$points, wine_full1$variety)
+
+#fit_1 <- compare_m_gibbs(df_indian_open_min_4review$stars, factor(df_indian_open_min_4review$neighborhood))
+
+#apply(fit_1$params, 2, mean)
+#apply(fit_1$params, 2, sd)
+#mean(1/sqrt(fit_1$params[, 3]))
+#sd(1/sqrt(fit_1$params[, 3]))
+
+#theta_hat <- apply(fit_1$theta, 2, mean)
+```
+
+
+```{r}
+fit.mcmc<-as.mcmc(fit)
+plot(fit.mcmc)
+```
+
+
+```{r}
+acf(fit.mcmc)
+```
+
+
+
+```{r group_stats}
+raftery.diag(as.mcmc(fit))
+```
+```{r fit_mean}
+apply(fit, 2, mean)
+```
+```{r  fit_sd}
+apply(fit, 2, sd)
+```
+```{r}
+mean(1/sqrt(fit[, 3]))
+```
+```{r  fit_tau}
+sd(1/sqrt(fit[, 3]))
+```
+```{r  Predictive_distributions}
+y1_sim <- rnorm(5000, fit[, 1] + fit[, 2], sd = 1/sqrt(fit[, 3]))
+y2_sim <- rnorm(5000, fit[, 1] - fit[, 2], sd = 1/sqrt(fit[, 3]))
+ggplot(data.frame(y_sim_diff = y1_sim - y2_sim)) + stat_bin(aes(x = y_sim_diff, colour = I('black'), fill = I('#FFC0CB')), bins = 40)
+```
+```{r}
+mean(y1_sim < y2_sim)
+```
+```{r}
+ggplot(data.frame(y1_sim, y2_sim)) + geom_point(aes(y1_sim, y2_sim), alpha = 0.3) +
+geom_abline(slope = 1, intercept = 0)
+```
+
+#how much better
+```{r}
+
+mu = 86.1490840
+d = -1.0692570
+better = (mu+d)-(mu-d)
+better
+```
+
+
+
+
+Note that the `echo = FALSE` parameter was added to the code chunk to prevent printing of the R code that generated the plot.
